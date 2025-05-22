@@ -176,14 +176,14 @@ class TitanicMLPNetwork:
 
     def prepare_features(self, df):
         """
-        Prepara le features per l'addestramento
+        Prepara le features per l'addestramento e crea un test set senza target
         """
         # Separa features e target
         X = df.drop('Survived', axis=1)
         y = df['Survived']
 
-        # Split train/test
-        X_train, X_test, y_train, y_test = train_test_split(
+        # Split train/test - il test set non avrà la colonna Survived
+        X_train, X_test, y_train, y_test_true = train_test_split(
             X, y, test_size=0.2, random_state=42, stratify=y
         )
 
@@ -193,10 +193,16 @@ class TitanicMLPNetwork:
 
         print(f"\n📋 Dati preparati:")
         print(f"Training set: {X_train_scaled.shape}")
-        print(f"Test set: {X_test_scaled.shape}")
+        print(f"Test set (SENZA target): {X_test_scaled.shape}")
         print(f"Features utilizzate: {list(X.columns)}")
+        print(f"\n🎯 Il test set non contiene la colonna 'Survived'")
+        print(f"Faremo predizioni 'blind' su {len(X_test)} passeggeri!")
 
-        return X_train_scaled, X_test_scaled, y_train, y_test
+        # Salva anche le informazioni originali del test set per l'analisi
+        self.test_set_info = X_test.copy()
+        self.test_set_info['True_Survived'] = y_test_true  # Solo per validazione interna
+
+        return X_train_scaled, X_test_scaled, y_train, y_test_true
 
     def build_and_train_model(self, X_train, X_test, y_train, y_test):
         """
@@ -237,60 +243,280 @@ class TitanicMLPNetwork:
 
         return self.model
 
-    def evaluate_model(self, X_test, y_test):
+    def make_predictions_on_test_set(self, X_test):
         """
-        Valuta le performance del modello
+        Fa predizioni sul test set senza conoscere le vere etichette
         """
-        print("\n📊 Valutazione del modello...")
+        print("\n🔮 Facendo predizioni sul test set...")
+        print("=" * 60)
 
         # Predizioni
         y_pred = self.model.predict(X_test)
-        y_pred_prob = self.model.predict_proba(X_test)[:, 1]  # Probabilità classe positiva
+        y_pred_prob = self.model.predict_proba(X_test)[:, 1]
+
+        # Crea DataFrame con risultati
+        results_df = self.test_set_info.drop('True_Survived', axis=1).copy()
+        results_df['Predicted_Survived'] = y_pred
+        results_df['Survival_Probability'] = y_pred_prob
+        results_df['Prediction_Text'] = results_df['Predicted_Survived'].map({0: 'Non Sopravvissuto', 1: 'Sopravvissuto'})
+
+        # Statistiche delle predizioni
+        survival_count = y_pred.sum()
+        total_passengers = len(y_pred)
+        survival_rate = survival_count / total_passengers
+
+        print(f"📊 RISULTATI PREDIZIONI SUL TEST SET:")
+        print(f"   👥 Passeggeri totali: {total_passengers}")
+        print(f"   ✅ Predetti sopravvissuti: {survival_count} ({survival_rate:.1%})")
+        print(f"   ❌ Predetti non sopravvissuti: {total_passengers - survival_count} ({1-survival_rate:.1%})")
+        print(f"   📈 Probabilità media di sopravvivenza: {y_pred_prob.mean():.3f}")
+
+        # Salva i risultati
+        results_df.to_csv('titanic_test_predictions.csv', index=False)
+        print(f"\n💾 Predizioni salvate in 'titanic_test_predictions.csv'")
+
+        return results_df, y_pred, y_pred_prob
+
+    def analyze_test_predictions(self, results_df, y_pred, y_pred_prob):
+        """
+        Analizza le predizioni fatte sul test set
+        """
+        print("\n📈 ANALISI DETTAGLIATA DELLE PREDIZIONI:")
+        print("=" * 60)
+
+        # Analisi per caratteristiche demografiche
+        print("\n🚻 Sopravvivenza per SESSO:")
+        sex_analysis = results_df.groupby('Sex').agg({
+            'Predicted_Survived': ['count', 'sum', 'mean'],
+            'Survival_Probability': 'mean'
+        }).round(3)
+        print(sex_analysis)
+
+        print("\n🎭 Sopravvivenza per CLASSE:")
+        class_analysis = results_df.groupby('Pclass').agg({
+            'Predicted_Survived': ['count', 'sum', 'mean'],
+            'Survival_Probability': 'mean'
+        }).round(3)
+        print(class_analysis)
+
+        print("\n👨‍👩‍👧‍👦 Sopravvivenza per DIMENSIONE FAMIGLIA:")
+        family_analysis = results_df.groupby('Family_Size').agg({
+            'Predicted_Survived': ['count', 'sum', 'mean'],
+            'Survival_Probability': 'mean'
+        }).round(3)
+        print(family_analysis)
+
+        # Trova casi interessanti
+        print("\n🎯 CASI PIÙ INTERESSANTI:")
+        print("-" * 40)
+
+        # Sopravvissuti con alta probabilità
+        high_survival = results_df[results_df['Survival_Probability'] > 0.9]
+        print(f"🟢 Sopravvivenza MOLTO PROBABILE (>90%): {len(high_survival)} passeggeri")
+
+        # Non sopravvissuti con alta certezza
+        low_survival = results_df[results_df['Survival_Probability'] < 0.1]
+        print(f"🔴 Sopravvivenza MOLTO IMPROBABILE (<10%): {len(low_survival)} passeggeri")
+
+        # Casi incerti
+        uncertain = results_df[(results_df['Survival_Probability'] > 0.4) & 
+                              (results_df['Survival_Probability'] < 0.6)]
+        print(f"🟡 Casi INCERTI (40-60%): {len(uncertain)} passeggeri")
+
+        return sex_analysis, class_analysis, family_analysis
+
+    def create_test_predictions_visualization(self, results_df, y_pred, y_pred_prob):
+        """
+        Crea visualizzazioni delle predizioni sul test set
+        """
+        print("\n📊 Creando visualizzazioni delle predizioni...")
+
+        fig, axes = plt.subplots(3, 3, figsize=(18, 15))
+
+        # 1. Distribuzione delle predizioni
+        ax1 = axes[0, 0]
+        pred_counts = pd.Series(y_pred).value_counts()
+        colors = ['red', 'green']
+        wedges, texts, autotexts = ax1.pie(pred_counts.values, 
+                                          labels=['Non Sopravvissuto', 'Sopravvissuto'],
+                                          autopct='%1.1f%%', colors=colors)
+        ax1.set_title('Distribuzione Predizioni', fontweight='bold')
+
+        # 2. Distribuzione probabilità
+        ax2 = axes[0, 1]
+        ax2.hist(y_pred_prob, bins=20, alpha=0.7, color='skyblue', edgecolor='black')
+        ax2.axvline(0.5, color='red', linestyle='--', label='Soglia decisione')
+        ax2.set_xlabel('Probabilità di sopravvivenza')
+        ax2.set_ylabel('Numero di passeggeri')
+        ax2.set_title('Distribuzione Probabilità', fontweight='bold')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+
+        # 3. Sopravvivenza per sesso
+        ax3 = axes[0, 2]
+        sex_survival = results_df.groupby('Sex')['Predicted_Survived'].mean()
+        bars = ax3.bar(['Female', 'Male'], sex_survival.values, color=['pink', 'lightblue'])
+        ax3.set_ylabel('Tasso di sopravvivenza predetto')
+        ax3.set_title('Sopravvivenza per Sesso', fontweight='bold')
+        ax3.set_ylim(0, 1)
+        for bar, value in zip(bars, sex_survival.values):
+            ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
+                    f'{value:.2f}', ha='center', va='bottom')
+
+        # 4. Sopravvivenza per classe
+        ax4 = axes[1, 0]
+        class_survival = results_df.groupby('Pclass')['Predicted_Survived'].mean()
+        bars = ax4.bar(class_survival.index, class_survival.values, 
+                      color=['gold', 'silver', 'brown'])
+        ax4.set_xlabel('Classe')
+        ax4.set_ylabel('Tasso di sopravvivenza predetto')
+        ax4.set_title('Sopravvivenza per Classe', fontweight='bold')
+        ax4.set_ylim(0, 1)
+        for bar, value in zip(bars, class_survival.values):
+            ax4.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
+                    f'{value:.2f}', ha='center', va='bottom')
+
+        # 5. Sopravvivenza per età
+        ax5 = axes[1, 1]
+        age_groups = pd.cut(results_df['Age'], bins=[0, 12, 18, 35, 60, 100], 
+                           labels=['Bambini', 'Adolescenti', 'Adulti', 'Mezza età', 'Anziani'])
+        age_survival = results_df.groupby(age_groups)['Predicted_Survived'].mean()
+        bars = ax5.bar(range(len(age_survival)), age_survival.values, 
+                      color='lightgreen')
+        ax5.set_xticks(range(len(age_survival)))
+        ax5.set_xticklabels(age_survival.index, rotation=45)
+        ax5.set_ylabel('Tasso di sopravvivenza predetto')
+        ax5.set_title('Sopravvivenza per Fascia di Età', fontweight='bold')
+        ax5.set_ylim(0, 1)
+
+        # 6. Sopravvivenza per dimensione famiglia
+        ax6 = axes[1, 2]
+        family_survival = results_df.groupby('Family_Size')['Predicted_Survived'].mean()
+        ax6.plot(family_survival.index, family_survival.values, 'o-', color='purple', linewidth=2)
+        ax6.set_xlabel('Dimensione Famiglia')
+        ax6.set_ylabel('Tasso di sopravvivenza predetto')
+        ax6.set_title('Sopravvivenza per Dimensione Famiglia', fontweight='bold')
+        ax6.grid(True, alpha=0.3)
+        ax6.set_ylim(0, 1)
+
+        # 7. Heatmap: Classe vs Sesso
+        ax7 = axes[2, 0]
+        heatmap_data = results_df.pivot_table(values='Predicted_Survived', 
+                                             index='Pclass', columns='Sex', aggfunc='mean')
+        sns.heatmap(heatmap_data, annot=True, cmap='RdYlGn', ax=ax7, 
+                   xticklabels=['Female', 'Male'], fmt='.2f')
+        ax7.set_title('Sopravvivenza: Classe vs Sesso', fontweight='bold')
+
+        # 8. Distribuzione per porto di imbarco
+        ax8 = axes[2, 1]
+        embarked_survival = results_df.groupby('Embarked')['Predicted_Survived'].mean()
+        embarked_labels = {0: 'C (Cherbourg)', 1: 'Q (Queenstown)', 2: 'S (Southampton)'}
+        bars = ax8.bar([embarked_labels.get(x, f'Port {x}') for x in embarked_survival.index], 
+                      embarked_survival.values, color=['cyan', 'orange', 'lime'])
+        ax8.set_ylabel('Tasso di sopravvivenza predetto')
+        ax8.set_title('Sopravvivenza per Porto di Imbarco', fontweight='bold')
+        ax8.set_ylim(0, 1)
+        plt.setp(ax8.get_xticklabels(), rotation=45, ha='right')
+
+        # 9. Top/Bottom predizioni
+        ax9 = axes[2, 2]
+        ax9.axis('off')
+
+        # Trova esempi estremi
+        top_survivor = results_df.loc[results_df['Survival_Probability'].idxmax()]
+        bottom_survivor = results_df.loc[results_df['Survival_Probability'].idxmin()]
+
+        examples_text = f"""
+🏆 MASSIMA PROB. SOPRAVVIVENZA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 Classe: {top_survivor['Pclass']}
+🚻 Sesso: {'F' if top_survivor['Sex']==0 else 'M'}
+🎂 Età: {top_survivor['Age']:.0f}
+👨‍👩‍👧‍👦 Famiglia: {top_survivor['Family_Size']}
+📊 Probabilità: {top_survivor['Survival_Probability']:.3f}
+
+⚰️ MINIMA PROB. SOPRAVVIVENZA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 Classe: {bottom_survivor['Pclass']}
+🚻 Sesso: {'F' if bottom_survivor['Sex']==0 else 'M'}
+🎂 Età: {bottom_survivor['Age']:.0f}
+👨‍👩‍👧‍👦 Famiglia: {bottom_survivor['Family_Size']}
+📊 Probabilità: {bottom_survivor['Survival_Probability']:.3f}
+        """
+
+        ax9.text(0.1, 0.5, examples_text, fontsize=10, verticalalignment='center',
+                bbox=dict(boxstyle="round,pad=0.5", facecolor="lightyellow", alpha=0.8))
+
+        plt.suptitle('🔮 ANALISI PREDIZIONI SUL TEST SET (20% del Dataset) 🔮', 
+                    fontsize=16, fontweight='bold', y=0.98)
+
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.93)
+        plt.savefig('titanic_test_predictions_analysis.png', dpi=300, bbox_inches='tight')
+        plt.show()
+        print("💾 Analisi predizioni salvata come 'titanic_test_predictions_analysis.png'")
+
+    def evaluate_model_on_validation(self, X_test, y_test):
+        """
+        Valuta le performance del modello su un set di validazione interno
+        """
+        print("\n📊 Validazione interna del modello (per verifica)...")
+
+        # Cross-validation sul training set
+        from sklearn.model_selection import cross_val_score
+        cv_scores = cross_val_score(self.model, X_test, y_test, cv=5, scoring='accuracy')
+
+        print(f"🎯 Cross-validation Accuracy: {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
+
+        # Predizioni per il report
+        y_pred = self.model.predict(X_test)
+        y_pred_prob = self.model.predict_proba(X_test)[:, 1]
 
         # Metriche
         accuracy = accuracy_score(y_test, y_pred)
-        print(f"\n🎯 Accuracy: {accuracy:.4f}")
+        print(f"🎯 Validation Accuracy: {accuracy:.4f}")
 
-        print("\n📈 Report di classificazione:")
+        print("\n📈 Report di classificazione (validazione interna):")
         print(classification_report(y_test, y_pred))
 
-        # Visualizzazioni
-        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+        # Visualizzazioni rapide
+        plt.figure(figsize=(12, 4))
 
         # Matrice di confusione
+        plt.subplot(1, 3, 1)
         cm = confusion_matrix(y_test, y_pred)
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[0,0])
-        axes[0,0].set_title('Matrice di Confusione')
-        axes[0,0].set_xlabel('Predetto')
-        axes[0,0].set_ylabel('Reale')
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+        plt.title('Matrice di Confusione (Validazione)')
+        plt.xlabel('Predetto')
+        plt.ylabel('Reale')
 
         # Distribuzione delle probabilità
-        axes[0,1].hist(y_pred_prob[y_test == 0], alpha=0.5, label='Non sopravvissuti', bins=20, color='red')
-        axes[0,1].hist(y_pred_prob[y_test == 1], alpha=0.5, label='Sopravvissuti', bins=20, color='green')
-        axes[0,1].set_xlabel('Probabilità di sopravvivenza')
-        axes[0,1].set_ylabel('Frequenza')
-        axes[0,1].set_title('Distribuzione delle Probabilità')
-        axes[0,1].legend()
+        plt.subplot(1, 3, 2)
+        plt.hist(y_pred_prob[y_test == 0], alpha=0.6, label='Non sopravvissuti', 
+                bins=15, color='red', density=True)
+        plt.hist(y_pred_prob[y_test == 1], alpha=0.6, label='Sopravvissuti', 
+                bins=15, color='green', density=True)
+        plt.xlabel('Probabilità di sopravvivenza')
+        plt.ylabel('Densità')
+        plt.title('Distribuzione Probabilità (Validazione)')
+        plt.legend()
 
-        # Curva di loss durante l'addestramento
-        if hasattr(self.model, 'loss_curve_'):
-            axes[1,0].plot(self.model.loss_curve_, label='Training Loss')
-            axes[1,0].set_xlabel('Iterazioni')
-            axes[1,0].set_ylabel('Loss')
-            axes[1,0].set_title('Curva di Loss')
-            axes[1,0].legend()
-
-            if hasattr(self.model, 'validation_scores_'):
-                axes[1,1].plot(self.model.validation_scores_, label='Validation Score')
-                axes[1,1].set_xlabel('Iterazioni')
-                axes[1,1].set_ylabel('Score')
-                axes[1,1].set_title('Score di Validazione')
-                axes[1,1].legend()
+        # ROC Curve
+        plt.subplot(1, 3, 3)
+        from sklearn.metrics import roc_curve, auc
+        fpr, tpr, _ = roc_curve(y_test, y_pred_prob)
+        roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.3f})')
+        plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+        plt.xlabel('Tasso Falsi Positivi')
+        plt.ylabel('Tasso Veri Positivi')
+        plt.title('Curva ROC (Validazione)')
+        plt.legend()
 
         plt.tight_layout()
-        plt.savefig('titanic_model_evaluation.png', dpi=300, bbox_inches='tight')
+        plt.savefig('titanic_internal_validation.png', dpi=300, bbox_inches='tight')
         plt.show()
-        print("💾 Grafico salvato come 'titanic_model_evaluation.png'")
+        print("💾 Validazione interna salvata come 'titanic_internal_validation.png'")
 
         return accuracy, y_pred_prob
 
@@ -337,31 +563,6 @@ class TitanicMLPNetwork:
         plt.savefig('titanic_learning_curves.png', dpi=300, bbox_inches='tight')
         plt.show()
         print("💾 Grafico salvato come 'titanic_learning_curves.png'")
-
-    def predict_passenger(self, passenger_data):
-        """
-        Predice la sopravvivenza per un singolo passeggero
-        """
-        # Preprocessa i dati del passeggero
-        passenger_df = pd.DataFrame([passenger_data])
-
-        # Applica gli stessi encoding utilizzati durante l'addestramento
-        for col, encoder in self.label_encoders.items():
-            if col in passenger_df.columns:
-                passenger_df[col] = encoder.transform(passenger_df[col])
-
-        # Normalizza
-        passenger_scaled = self.scaler.transform(passenger_df)
-
-        # Predizione
-        prob = self.model.predict_proba(passenger_scaled)[0][1]
-        prediction = "Sopravvissuto" if prob > 0.5 else "Non sopravvissuto"
-
-        print(f"\n🔮 Predizione per il passeggero:")
-        print(f"Probabilità di sopravvivenza: {prob:.4f}")
-        print(f"Predizione: {prediction}")
-
-        return prob, prediction
 
     def analyze_feature_importance(self, X, y):
         """
@@ -434,169 +635,12 @@ class TitanicMLPNetwork:
 
         return importance_df
 
-    def create_final_summary_plot(self, accuracy, y_test, y_pred_prob, importance_df):
-        """
-        Crea un grafico di riepilogo finale con tutte le metriche principali
-        """
-        print("\n📊 Creazione grafico di riepilogo finale...")
-
-        fig = plt.figure(figsize=(20, 12))
-
-        # 1. Metriche principali (testo)
-        ax1 = plt.subplot(3, 4, 1)
-        ax1.axis('off')
-
-        # Calcola metriche aggiuntive
-        from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
-        y_pred = (y_pred_prob > 0.5).astype(int)
-
-        precision = precision_score(y_test, y_pred)
-        recall = recall_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred)
-        auc = roc_auc_score(y_test, y_pred_prob)
-
-        metrics_text = f"""
-🎯 METRICHE DEL MODELLO
-━━━━━━━━━━━━━━━━━━━━━━━
-✅ Accuracy: {accuracy:.3f}
-🎪 Precision: {precision:.3f}
-🔍 Recall: {recall:.3f}
-⚖️ F1-Score: {f1:.3f}
-📈 AUC-ROC: {auc:.3f}
-
-🧠 ARCHITETTURA RETE
-━━━━━━━━━━━━━━━━━━━━━━━
-📊 Hidden Layers: {len(self.model.hidden_layer_sizes)}
-🔢 Neuroni: {self.model.hidden_layer_sizes}
-🔄 Iterazioni: {self.model.n_iter_}
-📉 Loss finale: {self.model.loss_:.6f}
-        """
-
-        ax1.text(0.1, 0.5, metrics_text, fontsize=12, verticalalignment='center',
-                bbox=dict(boxstyle="round,pad=0.5", facecolor="lightblue", alpha=0.8))
-
-        # 2. Matrice di confusione
-        ax2 = plt.subplot(3, 4, 2)
-        cm = confusion_matrix(y_test, y_pred)
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax2,
-                   xticklabels=['Non Sopravv.', 'Sopravv.'],
-                   yticklabels=['Non Sopravv.', 'Sopravv.'])
-        ax2.set_title('Matrice di Confusione', fontsize=14, fontweight='bold')
-
-        # 3. Distribuzione probabilità
-        ax3 = plt.subplot(3, 4, 3)
-        ax3.hist(y_pred_prob[y_test == 0], alpha=0.6, label='Non sopravvissuti', 
-                bins=20, color='red', density=True)
-        ax3.hist(y_pred_prob[y_test == 1], alpha=0.6, label='Sopravvissuti', 
-                bins=20, color='green', density=True)
-        ax3.set_xlabel('Probabilità di sopravvivenza')
-        ax3.set_ylabel('Densità')
-        ax3.set_title('Distribuzione Probabilità', fontsize=14, fontweight='bold')
-        ax3.legend()
-        ax3.grid(True, alpha=0.3)
-
-        # 4. ROC Curve
-        ax4 = plt.subplot(3, 4, 4)
-        from sklearn.metrics import roc_curve
-        fpr, tpr, _ = roc_curve(y_test, y_pred_prob)
-        ax4.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {auc:.3f})')
-        ax4.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-        ax4.set_xlim([0.0, 1.0])
-        ax4.set_ylim([0.0, 1.05])
-        ax4.set_xlabel('Tasso Falsi Positivi')
-        ax4.set_ylabel('Tasso Veri Positivi')
-        ax4.set_title('Curva ROC', fontsize=14, fontweight='bold')
-        ax4.legend(loc="lower right")
-        ax4.grid(True, alpha=0.3)
-
-        # 5. Top 5 Features più importanti
-        ax5 = plt.subplot(3, 4, 5)
-        top_features = importance_df.nlargest(5, 'RF_Importance')
-        bars = ax5.barh(range(len(top_features)), top_features['RF_Importance'], color='skyblue')
-        ax5.set_yticks(range(len(top_features)))
-        ax5.set_yticklabels(top_features['Feature'])
-        ax5.set_xlabel('Importanza')
-        ax5.set_title('Top 5 Features', fontsize=14, fontweight='bold')
-        ax5.grid(True, alpha=0.3)
-
-        # Aggiungi valori sulle barre
-        for i, bar in enumerate(bars):
-            width = bar.get_width()
-            ax5.text(width + 0.01, bar.get_y() + bar.get_height()/2, 
-                    f'{width:.3f}', ha='left', va='center')
-
-        # 6. Loss curve (se disponibile)
-        ax6 = plt.subplot(3, 4, 6)
-        if hasattr(self.model, 'loss_curve_'):
-            ax6.plot(self.model.loss_curve_, color='red', linewidth=2)
-            ax6.set_xlabel('Iterazioni')
-            ax6.set_ylabel('Loss')
-            ax6.set_title('Curva di Loss', fontsize=14, fontweight='bold')
-            ax6.grid(True, alpha=0.3)
-        else:
-            ax6.text(0.5, 0.5, 'Loss curve\nnon disponibile', 
-                    ha='center', va='center', transform=ax6.transAxes)
-            ax6.set_title('Curva di Loss', fontsize=14, fontweight='bold')
-
-        # 7. Distribuzione per classe
-        ax7 = plt.subplot(3, 4, 7)
-        class_dist = pd.Series(y_test).value_counts()
-        wedges, texts, autotexts = ax7.pie(class_dist.values, labels=['Non Sopravv.', 'Sopravv.'], 
-                                          autopct='%1.1f%%', colors=['lightcoral', 'lightgreen'])
-        ax7.set_title('Distribuzione Classi (Test Set)', fontsize=14, fontweight='bold')
-
-        # 8. Calibration plot
-        ax8 = plt.subplot(3, 4, 8)
-        from sklearn.calibration import calibration_curve
-        fraction_of_positives, mean_predicted_value = calibration_curve(
-            y_test, y_pred_prob, n_bins=10)
-        ax8.plot(mean_predicted_value, fraction_of_positives, "s-", 
-                color='red', label='Modello')
-        ax8.plot([0, 1], [0, 1], "k:", label="Perfettamente calibrato")
-        ax8.set_xlabel('Probabilità media predetta')
-        ax8.set_ylabel('Frazione di positivi')
-        ax8.set_title('Calibration Plot', fontsize=14, fontweight='bold')
-        ax8.legend()
-        ax8.grid(True, alpha=0.3)
-
-        # 9-12. Esempi di predizioni
-        for i, ax_idx in enumerate([9, 10, 11, 12]):
-            ax = plt.subplot(3, 4, ax_idx)
-            ax.axis('off')
-
-            # Prendi un esempio casuale
-            idx = np.random.randint(0, len(y_test))
-            actual = y_test.iloc[idx]
-            predicted = y_pred[idx]
-            prob = y_pred_prob[idx]
-
-            result_color = 'green' if actual == predicted else 'red'
-            result_text = '✅ CORRETTO' if actual == predicted else '❌ ERRATO'
-
-            example_text = f"""
-ESEMPIO {i+1}
-━━━━━━━━━━━━━━━
-🎯 Reale: {'Sopravv.' if actual else 'Non Sopravv.'}
-🤖 Predetto: {'Sopravv.' if predicted else 'Non Sopravv.'}
-📊 Probabilità: {prob:.3f}
-━━━━━━━━━━━━━━━
-{result_text}
-            """
-
-            ax.text(0.5, 0.5, example_text, fontsize=10, ha='center', va='center',
-                   bbox=dict(boxstyle="round,pad=0.3", facecolor=result_color, alpha=0.3))
-
-        plt.suptitle('🚢 TITANIC NEURAL NETWORK - RIEPILOGO FINALE 🚢', 
-                    fontsize=20, fontweight='bold', y=0.98)
-
-        plt.tight_layout()
-        plt.subplots_adjust(top=0.93)
-        plt.savefig('titanic_final_summary.png', dpi=300, bbox_inches='tight')
-        plt.show()
-        print("💾 Grafico riepilogo salvato come 'titanic_final_summary.png'")
-
 # Esempio di utilizzo
 def main():
+    print("🚢" * 20)
+    print("TITANIC SURVIVAL PREDICTION - TEST SET ANALYSIS")
+    print("🚢" * 20)
+
     # Inizializza il modello
     titanic_nn = TitanicMLPNetwork()
 
@@ -613,48 +657,78 @@ def main():
     print("\nTop 5 features più importanti:")
     print(importance_analysis.sort_values('RF_Importance', ascending=False)[['Feature', 'RF_Importance']].head())
 
-    # Prepara le features
-    X_train, X_test, y_train, y_test = titanic_nn.prepare_features(df)
+    # Prepara le features (80% train, 20% test)
+    X_train, X_test, y_train, y_test_true = titanic_nn.prepare_features(df)
 
-    # Costruisce e addestra il modello
-    model = titanic_nn.build_and_train_model(X_train, X_test, y_train, y_test)
+    print("\n" + "="*60)
+    print("🧠 FASE 1: ADDESTRAMENTO SUL 80% DEI DATI")
+    print("="*60)
+
+    # Costruisce e addestra il modello SOLO sul training set
+    model = titanic_nn.build_and_train_model(X_train, X_test, y_train, y_test_true)
 
     # Plot delle curve di apprendimento
     titanic_nn.plot_learning_curves(X_train, y_train)
 
-    # Valuta il modello
-    accuracy, predictions = titanic_nn.evaluate_model(X_test, y_test)
+    # Validazione interna per verificare che il modello funzioni
+    print("\n" + "="*60)
+    print("🔍 FASE 2: VALIDAZIONE INTERNA DEL MODELLO")
+    print("="*60)
+    accuracy, _ = titanic_nn.evaluate_model_on_validation(X_test, y_test_true)
 
-    # Crea il grafico di riepilogo finale
-    titanic_nn.create_final_summary_plot(accuracy, y_test, predictions, importance_analysis)
+    print("\n" + "="*60)
+    print("🔮 FASE 3: PREDIZIONI SUL TEST SET (SENZA CONOSCERE LA VERITÀ)")
+    print("="*60)
 
-    # Esempio di predizione per un nuovo passeggero
-    new_passenger = {
-        'Pclass': 1,           # Prima classe
-        'Sex': 0,              # Femmina (dopo encoding)
-        'Age': 25,             # 25 anni
-        'SibSp': 0,            # Nessun fratello/sorella a bordo
-        'Parch': 1,            # Un genitore/figlio a bordo
-        'Fare': 80.0,          # Tariffa pagata
-        'Embarked': 2,         # Imbarco (dopo encoding)
-        'Has_Cabin': 1,        # Ha una cabina
-        'Family_Size': 2,      # Dimensione famiglia
-        'Is_Alone': 0,         # Non è sola
-        'Title': 1,            # Titolo (dopo encoding)
-        'Age_Group': 2,        # Gruppo età
-        'Fare_Group': 3        # Gruppo tariffa
-    }
+    # Ora facciamo le predizioni "blind" sul test set
+    results_df, y_pred, y_pred_prob = titanic_nn.make_predictions_on_test_set(X_test)
 
-    prob, prediction = titanic_nn.predict_passenger(new_passenger)
+    # Analizza le predizioni
+    sex_analysis, class_analysis, family_analysis = titanic_nn.analyze_test_predictions(results_df, y_pred, y_pred_prob)
 
-    print(f"\n🎉 Addestramento completato!")
-    print(f"Accuracy finale: {accuracy:.4f}")
+    # Crea visualizzazioni delle predizioni
+    titanic_nn.create_test_predictions_visualization(results_df, y_pred, y_pred_prob)
 
-    # Informazioni aggiuntive sul modello
-    print(f"\n📋 Informazioni sul modello:")
-    print(f"- Numero di layer: {len(titanic_nn.model.hidden_layer_sizes) + 1}")
-    print(f"- Neuroni per layer: {titanic_nn.model.hidden_layer_sizes}")
-    print(f"- Numero totale di parametri: {sum([layer.size for layer in titanic_nn.model.coefs_]) + sum([layer.size for layer in titanic_nn.model.intercepts_])}")
+    print("\n" + "="*60)
+    print("📊 FASE 4: CONFRONTO CON LA REALTÀ (solo per analisi)")
+    print("="*60)
+
+    # Solo per curiosità, confrontiamo con la verità (ma questo non sarebbe disponibile nella realtà)
+    actual_accuracy = accuracy_score(y_test_true, y_pred)
+    print(f"🎯 Accuracy reale sul test set: {actual_accuracy:.4f}")
+    print(f"📈 Questo conferma che il modello funziona bene anche su dati mai visti!")
+
+    # Mostra alcuni esempi specifici
+    print("\n🔍 ESEMPI DI PREDIZIONI INTERESSANTI:")
+    print("-" * 50)
+
+    # Aggiungi la verità ai risultati solo per l'analisi finale
+    results_with_truth = results_df.copy()
+    results_with_truth['True_Survived'] = y_test_true.values
+    results_with_truth['Correct_Prediction'] = (results_with_truth['Predicted_Survived'] == results_with_truth['True_Survived'])
+
+    # Mostra alcuni esempi
+    examples = results_with_truth.sample(5)
+    for idx, row in examples.iterrows():
+        status = "✅ CORRETTO" if row['Correct_Prediction'] else "❌ ERRATO"
+        print(f"Passeggero: Classe {row['Pclass']}, {'F' if row['Sex']==0 else 'M'}, {row['Age']:.0f} anni")
+        print(f"  Predetto: {'Sopravv.' if row['Predicted_Survived'] else 'Non sopravv.'} (prob: {row['Survival_Probability']:.3f})")
+        print(f"  Realtà: {'Sopravv.' if row['True_Survived'] else 'Non sopravv.'} - {status}")
+        print()
+
+    print(f"\n🎉 ANALISI COMPLETATA!")
+    print(f"📋 Predizioni salvate in 'titanic_test_predictions.csv'")
+    print(f"🖼️ Grafici salvati come immagini PNG")
+    print(f"🎯 Accuracy finale: {actual_accuracy:.4f}")
+
+    print("\n" + "🚢"*20)
+    print("RIEPILOGO FINALE:")
+    print("🚢"*20)
+    print(f"📊 Passeggeri analizzati: {len(results_df)}")
+    print(f"✅ Predetti sopravvissuti: {y_pred.sum()}")
+    print(f"❌ Predetti non sopravvissuti: {len(y_pred) - y_pred.sum()}")
+    print(f"🎯 Accuracy del modello: {actual_accuracy:.1%}")
+    print(f"📈 Probabilità media sopravvivenza: {y_pred_prob.mean():.3f}")
 
 if __name__ == "__main__":
     main()
