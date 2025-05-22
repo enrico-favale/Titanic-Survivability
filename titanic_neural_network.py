@@ -1,281 +1,4 @@
-# Crea anche grafici individuali per maggiore dettaglio
-        self.save_individual_prediction_plots(results_df, y_pred, y_pred_prob)
-    
-    def save_individual_prediction_plots(self, results_df, y_pred, y_pred_prob):
-        """
-        Salva grafici individuali per ogni tipo di analisi
-        """
-        print("\n📊 Salvando grafici individuali dettagliati...")
-        
-        # 1. Grafico distribuzione probabilità dettagliato
-        plt.figure(figsize=(12, 8))
-        plt.subplot(2, 2, 1)
-        n, bins, patches = plt.hist(y_pred_prob, bins=30, alpha=0.7, color='lightblue', 
-                                   edgecolor='black', density=True)
-        plt.axvline(0.5, color='red', linestyle='--', linewidth=2, label='Soglia decisione')
-        plt.axvline(y_pred_prob.mean(), color='orange', linestyle='-', linewidth=2, 
-                   label=f'Media ({y_pred_prob.mean():.3f})')
-        plt.xlabel('Probabilità di sopravvivenza')
-        plt.ylabel('Densità')
-        plt.title('Distribuzione Dettagliata delle Probabilità', fontweight='bold')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # 2. Box plot per sesso
-        plt.subplot(2, 2, 2)
-        sex_data = [results_df[results_df['Sex']==0]['Survival_Probability'],
-                   results_df[results_df['Sex']==1]['Survival_Probability']]
-        plt.boxplot(sex_data, labels=['Female', 'Male'])
-        plt.ylabel('Probabilità di sopravvivenza')
-        plt.title('Box Plot: Probabilità per Sesso', fontweight='bold')
-        plt.grid(True, alpha=0.3)
-        
-        # 3. Box plot per classe
-        plt.subplot(2, 2, 3)
-        class_data = [results_df[results_df['Pclass']==i]['Survival_Probability'] for i in [1,2,3]]
-        plt.boxplot(class_data, labels=['Classe 1', 'Classe 2', 'Classe 3'])
-        plt.ylabel('Probabilità di sopravvivenza')
-        plt.title('Box Plot: Probabilità per Classe', fontweight='bold')
-        plt.grid(True, alpha=0.3)
-        
-        # 4. Scatter plot: Età vs Probabilità
-        plt.subplot(2, 2, 4)
-        colors = ['red' if pred == 0 else 'green' for pred in y_pred]
-        plt.scatter(results_df['Age'], y_pred_prob, c=colors, alpha=0.6)
-        plt.axhline(0.5, color='blue', linestyle='--', alpha=0.7)
-        plt.xlabel('Età')
-        plt.ylabel('Probabilità di sopravvivenza')
-        plt.title('Età vs Probabilità di Sopravvivenza', fontweight='bold')
-        plt.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        plt.savefig('titanic_detailed_probability_analysis.png', dpi=300, bbox_inches='tight')
-        plt.show()
-        print("💾 Analisi dettagliata probabilità salvata come 'titanic_detailed_probability_analysis.png'")
-        
-        # 2. Grafico di confronto demografico
-        plt.figure(figsize=(15, 10))
-        
-        # Subplot 1: Sopravvivenza per tutte le combinazioni
-        plt.subplot(2, 3, 1)
-        survival_by_sex_class = results_df.groupby(['Sex', 'Pclass'])['Predicted_Survived'].mean().unstack()
-        survival_by_sex_class.plot(kind='bar', ax=plt.gca(), color=['gold', 'silver', 'brown'])
-        plt.title('Sopravvivenza per Sesso e Classe')
-        plt.xlabel('Sesso (0=Female, 1=Male)')
-        plt.ylabel('Tasso sopravvivenza')
-        plt.xticks(rotation=0)
-        plt.legend(title='Classe')
-        
-        # Subplot 2: Distribuzione età per sopravvissuti vs non
-        plt.subplot(2, 3, 2)
-        survived_ages = results_df[results_df['Predicted_Survived']==1]['Age']
-        not_survived_ages = results_df[results_df['Predicted_Survived']==0]['Age']
-        plt.hist(survived_ages, alpha=0.7, label='Sopravvissuti', bins=20, color='green')
-        plt.hist(not_survived_ages, alpha=0.7, label='Non sopravvissuti', bins=20, color='red')
-        plt.xlabel('Età')
-        plt.ylabel('Frequenza')
-        plt.title('Distribuzione Età per Predizione')
-        plt.legend()
-        
-        # Subplot 3: Tariffa vs Sopravvivenza
-        plt.subplot(2, 3, 3)
-        plt.scatter(results_df['Fare'], y_pred_prob, c=y_pred, cmap='RdYlGn', alpha=0.6)
-        plt.xlabel('Tariffa pagata')
-        plt.ylabel('Probabilità sopravvivenza')
-        plt.title('Tariffa vs Probabilità Sopravvivenza')
-        plt.colorbar(label='Predizione (0=Morte, 1=Sopravv.)')
-        
-        # Subplot 4: Famiglia vs Sopravvivenza
-        plt.subplot(2, 3, 4)
-        family_stats = results_df.groupby('Family_Size').agg({
-            'Predicted_Survived': ['count', 'sum', 'mean']
-        })
-        family_stats.columns = ['Totale', 'Sopravvissuti', 'Tasso']
-        family_stats['Tasso'].plot(kind='bar', color='purple', alpha=0.7)
-        plt.title('Tasso Sopravvivenza per Dimensione Famiglia')
-        plt.xlabel('Dimensione Famiglia')
-        plt.ylabel('Tasso Sopravvivenza')
-        plt.xticks(rotation=0)
-        
-        # Subplot 5: Mappa di calore completa
-        plt.subplot(2, 3, 5)
-        # Crea una matrice di correlazione delle probabilità
-        correlation_features = ['Pclass', 'Sex', 'Age_Group', 'Family_Size', 'Survival_Probability']
-        corr_matrix = results_df[correlation_features].corr()
-        sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0, 
-                   square=True, fmt='.2f')
-        plt.title('Correlazioni Features vs Probabilità')
-        
-        # Subplot 6: Statistiche riassuntive
-        plt.subplot(2, 3, 6)
-        plt.axis('off')
-        
-        # Calcola statistiche interessanti
-        total_passengers = len(results_df)
-        predicted_survivors = y_pred.sum()
-        high_confidence_survivors = len(results_df[results_df['Survival_Probability'] > 0.8])
-        low_confidence_deaths = len(results_df[results_df['Survival_Probability'] < 0.2])
-        
-        stats_text = f"""
-📊 STATISTICHE RIASSUNTIVE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👥 Passeggeri totali nel test set: {total_passengers}
-✅ Predetti sopravvissuti: {predicted_survivors} ({predicted_survivors/total_passengers*100:.1f}%)
-❌ Predetti morti: {total_passengers-predicted_survivors} ({(total_passengers-predicted_survivors)/total_passengers*100:.1f}%)
-
-🎯 CONFIDENZA DELLE PREDIZIONI
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟢 Alta confidenza sopravv. (>80%): {high_confidence_survivors}
-🔴 Alta confidenza morte (<20%): {low_confidence_deaths}
-🟡 Casi incerti (20-80%): {total_passengers - high_confidence_survivors - low_confidence_deaths}
-
-📈 PROBABILITÀ MEDIA: {y_pred_prob.mean():.3f}
-📊 MEDIANA: {np.median(y_pred_prob):.3f}
-📏 DEVIAZIONE STANDARD: {y_pred_prob.std():.3f}
-
-🏆 INSIGHTS CHIAVE:
-• Donne: {results_df[results_df['Sex']==0]['Predicted_Survived'].mean()*100:.1f}% sopravvivenza
-• Uomini: {results_df[results_df['Sex']==1]['Predicted_Survived'].mean()*100:.1f}% sopravvivenza
-• Prima classe: {results_df[results_df['Pclass']==1]['Predicted_Survived'].mean()*100:.1f}% sopravvivenza
-• Terza classe: {results_df[results_df['Pclass']==3]['Predicted_Survived'].mean()*100:.1f}% sopravvivenza
-        """
-        
-        plt.text(0.05, 0.95, stats_text, transform=plt.gca().transAxes, fontsize=10,
-                verticalalignment='top', bbox=dict(boxstyle="round,pad=0.5", 
-                facecolor="lightcyan", alpha=0.8))
-        
-        plt.suptitle('📈 ANALISI DEMOGRAFICA DETTAGLIATA DELLE PREDIZIONI', 
-                    fontsize=16, fontweight='bold')
-        plt.tight_layout()
-        plt.savefig('titanic_demographic_analysis.png', dpi=300, bbox_inches='tight')
-        plt.show()
-        print("💾 Analisi demografica salvata come 'titanic_demographic_analysis.png'")
-        
-        # 3. Grafico finale riassuntivo con esempi specifici
-        plt.figure(figsize=(16, 10))
-        
-        # Trova esempi interessanti
-        examples_df = self.find_interesting_examples(results_df)
-        
-        # Subplot principale: scatter plot completo
-        plt.subplot(2, 2, (1, 2))
-        scatter = plt.scatter(results_df['Age'], results_df['Fare'], 
-                            c=y_pred_prob, cmap='RdYlGn', s=60, alpha=0.7, edgecolors='black')
-        plt.colorbar(scatter, label='Probabilità di Sopravvivenza')
-        plt.xlabel('Età')
-        plt.ylabel('Tariffa Pagata')
-        plt.title('Mappa Completa: Età vs Tariffa vs Probabilità Sopravvivenza', fontweight='bold', fontsize=14)
-        plt.grid(True, alpha=0.3)
-        
-        # Aggiungi annotazioni per casi estremi
-        top_case = results_df.loc[results_df['Survival_Probability'].idxmax()]
-        bottom_case = results_df.loc[results_df['Survival_Probability'].idxmin()]
-        
-        plt.annotate(f'MAX: {top_case["Survival_Probability"]:.3f}', 
-                    xy=(top_case['Age'], top_case['Fare']), xytext=(10, 10),
-                    textcoords='offset points', ha='left',
-                    bbox=dict(boxstyle='round,pad=0.3', fc='green', alpha=0.7),
-                    arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
-        
-        plt.annotate(f'MIN: {bottom_case["Survival_Probability"]:.3f}', 
-                    xy=(bottom_case['Age'], bottom_case['Fare']), xytext=(10, -10),
-                    textcoords='offset points', ha='left',
-                    bbox=dict(boxstyle='round,pad=0.3', fc='red', alpha=0.7),
-                    arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
-        
-        # Subplot esempi interessanti
-        plt.subplot(2, 2, 3)
-        plt.axis('off')
-        examples_text = self.format_examples_text(examples_df)
-        plt.text(0.05, 0.95, examples_text, transform=plt.gca().transAxes, fontsize=9,
-                verticalalignment='top', bbox=dict(boxstyle="round,pad=0.5", 
-                facecolor="lightyellow", alpha=0.9))
-        plt.title('🎯 Esempi Rappresentativi', fontweight='bold')
-        
-        # Subplot distribuzione finale
-        plt.subplot(2, 2, 4)
-        # Crea un grafico a barre impilate per classe e sesso
-        pivot_data = results_df.pivot_table(values='Predicted_Survived', 
-                                           index='Pclass', columns='Sex', aggfunc='mean')
-        pivot_data.plot(kind='bar', ax=plt.gca(), color=['hotpink', 'cornflowerblue'])
-        plt.title('Tasso Sopravvivenza: Classe vs Sesso', fontweight='bold')
-        plt.xlabel('Classe')
-        plt.ylabel('Tasso Sopravvivenza')
-        plt.legend(['Female', 'Male'])
-        plt.xticks(rotation=0)
-        plt.grid(True, alpha=0.3, axis='y')
-        
-        plt.suptitle('🚢 RIEPILOGO FINALE PREDIZIONI TITANIC 🚢', 
-                    fontsize=18, fontweight='bold')
-        plt.tight_layout()
-        plt.savefig('titanic_final_prediction_summary.png', dpi=300, bbox_inches='tight')
-        plt.show()
-        print("💾 Riepilogo finale salvato come 'titanic_final_prediction_summary.png'")
-        
-        print("\n🎉 TUTTI I GRAFICI SALVATI CON SUCCESSO!")
-        print("📂 File grafici generati:")
-        print("   1. titanic_test_predictions_analysis.png (PRINCIPALE)")
-        print("   2. titanic_detailed_probability_analysis.png")
-        print("   3. titanic_demographic_analysis.png") 
-        print("   4. titanic_final_prediction_summary.png")
-    
-    def find_interesting_examples(self, results_df):
-        """
-        Trova esempi interessanti per l'analisi
-        """
-        examples = []
-        
-        # Caso 1: Massima probabilità sopravvivenza
-        max_prob_idx = results_df['Survival_Probability'].idxmax()
-        examples.append(('MAX_SURVIVAL', results_df.loc[max_prob_idx]))
-        
-        # Caso 2: Minima probabilità sopravvivenza  
-        min_prob_idx = results_df['Survival_Probability'].idxmin()
-        examples.append(('MIN_SURVIVAL', results_df.loc[min_prob_idx]))
-        
-        # Caso 3: Esempio tipico donna prima classe
-        women_first = results_df[(results_df['Sex']==0) & (results_df['Pclass']==1)]
-        if len(women_first) > 0:
-            typical_woman_first = women_first.iloc[len(women_first)//2]
-            examples.append(('TYPICAL_WOMAN_1ST', typical_woman_first))
-        
-        # Caso 4: Esempio tipico uomo terza classe
-        men_third = results_df[(results_df['Sex']==1) & (results_df['Pclass']==3)]
-        if len(men_third) > 0:
-            typical_man_third = men_third.iloc[len(men_third)//2]
-            examples.append(('TYPICAL_MAN_3RD', typical_man_third))
-        
-        # Caso 5: Caso più incerto (vicino a 0.5)
-        uncertain_idx = (results_df['Survival_Probability'] - 0.5).abs().idxmin()
-        examples.append(('MOST_UNCERTAIN', results_df.loc[uncertain_idx]))
-        
-        return examples
-    
-    def format_examples_text(self, examples):
-        """
-        Formatta il testo degli esempi per la visualizzazione
-        """
-        text = "🎯 ESEMPI RAPPRESENTATIVI\n"
-        text += "=" * 40 + "\n\n"
-        
-        labels = {
-            'MAX_SURVIVAL': '🏆 MASSIMA SOPRAVVIVENZA',
-            'MIN_SURVIVAL': '⚰️ MINIMA SOPRAVVIVENZA', 
-            'TYPICAL_WOMAN_1ST': '👩 DONNA PRIMA CLASSE',
-            'TYPICAL_MAN_3RD': '👨 UOMO TERZA CLASSE',
-            'MOST_UNCERTAIN': '🤔 CASO PIÙ INCERTO'
-        }
-        
-        for label, row in examples:
-            text += f"{labels.get(label, label)}\n"
-            text += f"Classe: {row['Pclass']} | "
-            text += f"Sesso: {'F' if row['Sex']==0 else 'M'} | "
-            text += f"Età: {row['Age']:.0f}\n"
-            text += f"Famiglia: {row['Family_Size']} | "
-            text += f"Prob: {row['Survival_Probability']:.3f}\n"
-            text += f"Prediz: {'✅ Sopravv.' if row['Predicted_Survived'] else '❌ Morte'}\n\n"
-        
-        return textimport pandas as pd
+import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -784,6 +507,161 @@ class TitanicMLPNetwork:
         
         # Crea anche grafici individuali per maggiore dettaglio
         self.save_individual_prediction_plots(results_df, y_pred, y_pred_prob)
+    
+    def save_individual_prediction_plots(self, results_df, y_pred, y_pred_prob):
+        """
+        Salva grafici individuali per ogni tipo di analisi
+        """
+        print("\n📊 Salvando grafici individuali dettagliati...")
+        
+        # 1. Grafico distribuzione probabilità dettagliato
+        plt.figure(figsize=(12, 8))
+        plt.subplot(2, 2, 1)
+        n, bins, patches = plt.hist(y_pred_prob, bins=30, alpha=0.7, color='lightblue', 
+                                   edgecolor='black', density=True)
+        plt.axvline(0.5, color='red', linestyle='--', linewidth=2, label='Soglia decisione')
+        plt.axvline(y_pred_prob.mean(), color='orange', linestyle='-', linewidth=2, 
+                   label=f'Media ({y_pred_prob.mean():.3f})')
+        plt.xlabel('Probabilità di sopravvivenza')
+        plt.ylabel('Densità')
+        plt.title('Distribuzione Dettagliata delle Probabilità', fontweight='bold')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # 2. Box plot per sesso
+        plt.subplot(2, 2, 2)
+        sex_data = [results_df[results_df['Sex']==0]['Survival_Probability'],
+                   results_df[results_df['Sex']==1]['Survival_Probability']]
+        plt.boxplot(sex_data, labels=['Female', 'Male'])
+        plt.ylabel('Probabilità di sopravvivenza')
+        plt.title('Box Plot: Probabilità per Sesso', fontweight='bold')
+        plt.grid(True, alpha=0.3)
+        
+        # 3. Box plot per classe
+        plt.subplot(2, 2, 3)
+        class_data = [results_df[results_df['Pclass']==i]['Survival_Probability'] for i in [1,2,3]]
+        plt.boxplot(class_data, labels=['Classe 1', 'Classe 2', 'Classe 3'])
+        plt.ylabel('Probabilità di sopravvivenza')
+        plt.title('Box Plot: Probabilità per Classe', fontweight='bold')
+        plt.grid(True, alpha=0.3)
+        
+        # 4. Scatter plot: Età vs Probabilità
+        plt.subplot(2, 2, 4)
+        colors = ['red' if pred == 0 else 'green' for pred in y_pred]
+        plt.scatter(results_df['Age'], y_pred_prob, c=colors, alpha=0.6)
+        plt.axhline(0.5, color='blue', linestyle='--', alpha=0.7)
+        plt.xlabel('Età')
+        plt.ylabel('Probabilità di sopravvivenza')
+        plt.title('Età vs Probabilità di Sopravvivenza', fontweight='bold')
+        plt.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig('titanic_detailed_probability_analysis.png', dpi=300, bbox_inches='tight')
+        plt.show()
+        print("💾 Analisi dettagliata probabilità salvata come 'titanic_detailed_probability_analysis.png'")
+        
+        # 2. Grafico di confronto demografico
+        plt.figure(figsize=(15, 10))
+        
+        # Subplot 1: Sopravvivenza per tutte le combinazioni
+        plt.subplot(2, 3, 1)
+        survival_by_sex_class = results_df.groupby(['Sex', 'Pclass'])['Predicted_Survived'].mean().unstack()
+        survival_by_sex_class.plot(kind='bar', ax=plt.gca(), color=['gold', 'silver', 'brown'])
+        plt.title('Sopravvivenza per Sesso e Classe')
+        plt.xlabel('Sesso (0=Female, 1=Male)')
+        plt.ylabel('Tasso sopravvivenza')
+        plt.xticks(rotation=0)
+        plt.legend(title='Classe')
+        
+        # Subplot 2: Distribuzione età per sopravvissuti vs non
+        plt.subplot(2, 3, 2)
+        survived_ages = results_df[results_df['Predicted_Survived']==1]['Age']
+        not_survived_ages = results_df[results_df['Predicted_Survived']==0]['Age']
+        plt.hist(survived_ages, alpha=0.7, label='Sopravvissuti', bins=20, color='green')
+        plt.hist(not_survived_ages, alpha=0.7, label='Non sopravvissuti', bins=20, color='red')
+        plt.xlabel('Età')
+        plt.ylabel('Frequenza')
+        plt.title('Distribuzione Età per Predizione')
+        plt.legend()
+        
+        # Subplot 3: Tariffa vs Sopravvivenza
+        plt.subplot(2, 3, 3)
+        plt.scatter(results_df['Fare'], y_pred_prob, c=y_pred, cmap='RdYlGn', alpha=0.6)
+        plt.xlabel('Tariffa pagata')
+        plt.ylabel('Probabilità sopravvivenza')
+        plt.title('Tariffa vs Probabilità Sopravvivenza')
+        plt.colorbar(label='Predizione (0=Morte, 1=Sopravv.)')
+        
+        # Subplot 4: Famiglia vs Sopravvivenza
+        plt.subplot(2, 3, 4)
+        family_stats = results_df.groupby('Family_Size').agg({
+            'Predicted_Survived': ['count', 'sum', 'mean']
+        })
+        family_stats.columns = ['Totale', 'Sopravvissuti', 'Tasso']
+        family_stats['Tasso'].plot(kind='bar', color='purple', alpha=0.7)
+        plt.title('Tasso Sopravvivenza per Dimensione Famiglia')
+        plt.xlabel('Dimensione Famiglia')
+        plt.ylabel('Tasso Sopravvivenza')
+        plt.xticks(rotation=0)
+        
+        # Subplot 5: Mappa di calore completa
+        plt.subplot(2, 3, 5)
+        correlation_features = ['Pclass', 'Sex', 'Age_Group', 'Family_Size', 'Survival_Probability']
+        corr_matrix = results_df[correlation_features].corr()
+        sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0, 
+                   square=True, fmt='.2f')
+        plt.title('Correlazioni Features vs Probabilità')
+        
+        # Subplot 6: Statistiche riassuntive
+        plt.subplot(2, 3, 6)
+        plt.axis('off')
+        
+        # Calcola statistiche interessanti
+        total_passengers = len(results_df)
+        predicted_survivors = y_pred.sum()
+        high_confidence_survivors = len(results_df[results_df['Survival_Probability'] > 0.8])
+        low_confidence_deaths = len(results_df[results_df['Survival_Probability'] < 0.2])
+        
+        stats_text = f"""
+📊 STATISTICHE RIASSUNTIVE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👥 Passeggeri totali nel test set: {total_passengers}
+✅ Predetti sopravvissuti: {predicted_survivors} ({predicted_survivors/total_passengers*100:.1f}%)
+❌ Predetti morti: {total_passengers-predicted_survivors} ({(total_passengers-predicted_survivors)/total_passengers*100:.1f}%)
+
+🎯 CONFIDENZA DELLE PREDIZIONI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🟢 Alta confidenza sopravv. (>80%): {high_confidence_survivors}
+🔴 Alta confidenza morte (<20%): {low_confidence_deaths}
+🟡 Casi incerti (20-80%): {total_passengers - high_confidence_survivors - low_confidence_deaths}
+
+📈 PROBABILITÀ MEDIA: {y_pred_prob.mean():.3f}
+📊 MEDIANA: {np.median(y_pred_prob):.3f}
+📏 DEVIAZIONE STANDARD: {y_pred_prob.std():.3f}
+
+🏆 INSIGHTS CHIAVE:
+• Donne: {results_df[results_df['Sex']==0]['Predicted_Survived'].mean()*100:.1f}% sopravvivenza
+• Uomini: {results_df[results_df['Sex']==1]['Predicted_Survived'].mean()*100:.1f}% sopravvivenza
+• Prima classe: {results_df[results_df['Pclass']==1]['Predicted_Survived'].mean()*100:.1f}% sopravvivenza
+• Terza classe: {results_df[results_df['Pclass']==3]['Predicted_Survived'].mean()*100:.1f}% sopravvivenza
+        """
+        
+        plt.text(0.05, 0.95, stats_text, transform=plt.gca().transAxes, fontsize=10,
+                verticalalignment='top', bbox=dict(boxstyle="round,pad=0.5", 
+                facecolor="lightcyan", alpha=0.8))
+        
+        plt.suptitle('📈 ANALISI DEMOGRAFICA DETTAGLIATA DELLE PREDIZIONI', 
+                    fontsize=16, fontweight='bold')
+        plt.tight_layout()
+        plt.savefig('titanic_demographic_analysis.png', dpi=300, bbox_inches='tight')
+        plt.show()
+        print("💾 Analisi demografica salvata come 'titanic_demographic_analysis.png'")
+        
+        print("\n🎉 TUTTI I GRAFICI SALVATI CON SUCCESSO!")
+        print("📂 File grafici generati:")
+        print("   1. titanic_test_predictions_analysis.png (PRINCIPALE)")
+        print("   2. titanic_detailed_probability_analysis.png")
+        print("   3. titanic_demographic_analysis.png")
     
     def evaluate_model_on_validation(self, X_test, y_test):
         """
