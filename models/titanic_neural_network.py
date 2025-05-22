@@ -852,7 +852,7 @@ def main():
     titanic_nn = TitanicMLPNetwork()
     
     # Carica e preprocessa i dati
-    df = titanic_nn.load_and_preprocess_data('6_titanic.csv')
+    df = titanic_nn.load_and_preprocess_data('dataset.csv')
     
     # Esplora i dati
     titanic_nn.explore_data(df)
