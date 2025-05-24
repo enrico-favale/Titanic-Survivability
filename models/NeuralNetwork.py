@@ -11,16 +11,15 @@ import warnings
 warnings.filterwarnings('ignore')
 
 class TitanicSurvivalModel:
-    def __init__(self, csv_path: str):
-        self.csv_path = csv_path
+    def __init__(self, dataset_path: str):
+        self.dataset_path = dataset_path
+        
         self.model = None
         self.scaler = StandardScaler()
         self.label_encoders = {}
-        
-        self.history = None
 
     def load_and_preprocess_data(self):
-        df = pd.read_csv(self.csv_path)
+        df = pd.read_csv(self.dataset_path)
 
         # Manteniamo solo le colonne utili
         df = df[['Survived', 'Pclass', 'Sex', 'Age', 'SibSp', 'Parch', 'Fare', 'Embarked']]
@@ -51,7 +50,7 @@ class TitanicSurvivalModel:
 
         # Split train/test
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-            X_scaled, y, test_size=0.2, random_state=42
+            X_scaled, y, test_size=0.1, random_state=42
         )
 
     def build_model(self):
@@ -78,13 +77,21 @@ class TitanicSurvivalModel:
             tf.keras.layers.Dense(1, activation='sigmoid')
         ])
         
+        optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
+        loss = tf.keras.losses.BinaryCrossentropy()
+        
         self.model.compile(
-            optimizer='adam',
-            loss='binary_crossentropy',
-            metrics=['accuracy', tf.keras.metrics.Precision(name='precision')]
+            optimizer=optimizer,
+            loss=loss,
+            metrics=[
+                # tf.keras.metrics.Accuracy(name="accuracy"),
+                'accuracy',
+                tf.keras.metrics.Precision(name="precision"),
+                tf.keras.metrics.F1Score(name="f1_score")           
+            ]
         )
 
-    def train(self, epochs=500, batch_size=25, validation_split=0.2):
+    def train(self, epochs=500, batch_size=10, validation_split=0):
         self.history = self.model.fit(
             self.X_train, 
             self.y_train, 
@@ -94,13 +101,14 @@ class TitanicSurvivalModel:
         )
 
     def evaluate(self):
-        loss, accuracy, precision = self.model.evaluate(self.X_test, self.y_test)
+        loss, accuracy, precision, f1_score = self.model.evaluate(self.X_test, self.y_test)
         
         print(f'\n\nTest Accuracy: {accuracy:.2f}')
         print(f'Test Precision: {precision:.2f}')
+        print(f'Test F1 Score: {f1_score:.2f}')
         print(f'Test Loss: {loss:.2f}')
         
-        return accuracy, precision
+        return loss, accuracy, precision, f1_score
     
     def plot_metrics(self, metrics = ['accuracy', 'precision']):
         plt.figure(figsize=(10, 6))
@@ -109,6 +117,8 @@ class TitanicSurvivalModel:
             plt.plot(self.history.history['accuracy'], label='Accuracy')
         if 'precision' in metrics and self.history.history['precision']:
             plt.plot(self.history.history['precision'], label='Precision')
+        if 'f1_score' in metrics and self.history.history['f1_score']:
+            plt.plot(self.history.history['f1_score'], label='F1 Score')
 
         plt.xlabel('Epochs')
         plt.ylabel('Metric Value')
