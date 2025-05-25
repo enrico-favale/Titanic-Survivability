@@ -96,7 +96,6 @@ class TitanicSurvivalModel:
 
     def evaluate(self):
         loss, accuracy, precision, f1 = self.model.evaluate(self.X_test, self.y_test)
-        
         # Calcolo F1-score
         y_pred_probs = self.model.predict(self.X_test)
         y_pred = (y_pred_probs > 0.5).astype(int)
