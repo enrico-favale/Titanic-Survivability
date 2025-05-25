@@ -82,14 +82,6 @@ class TitanicSurvivalModel:
         loss = tf.keras.losses.BinaryCrossentropy()
         
         self.model.compile(
-<<<<<<< HEAD
-            optimizer='adam',
-            loss='binary_crossentropy',
-            metrics=['accuracy', tf.keras.metrics.Precision(name='precision'), tf.keras.metrics.F1Score(name='f1')]
-        )
-
-    def train(self, epochs=1500, batch_size=100, validation_split=0.2):
-=======
             optimizer=optimizer,
             loss=loss,
             metrics=[
@@ -101,7 +93,6 @@ class TitanicSurvivalModel:
         )
 
     def train(self, epochs=500, batch_size=10, validation_split=0):
->>>>>>> 1b8bbe0c7f44d3cad526a62658967f81a1837864
         self.history = self.model.fit(
             self.X_train, 
             self.y_train, 
@@ -111,42 +102,24 @@ class TitanicSurvivalModel:
         )
 
     def evaluate(self):
-<<<<<<< HEAD
-        loss, accuracy, precision, f1 = self.model.evaluate(self.X_test, self.y_test)
-        # Calcolo F1-score
-        y_pred_probs = self.model.predict(self.X_test)
-        y_pred = (y_pred_probs > 0.5).astype(int)
-        f1 = f1_score(self.y_test, y_pred)
-=======
         loss, accuracy, precision, f1_score = self.model.evaluate(self.X_test, self.y_test)
->>>>>>> 1b8bbe0c7f44d3cad526a62658967f81a1837864
         
         print(f'\n\nTest Accuracy: {accuracy:.2f}')
         print(f'Test Precision: {precision:.2f}')
         print(f'Test F1 Score: {f1_score:.2f}')
         print(f'Test Loss: {loss:.2f}')
-        print(f'Test F1-score: {f1:.2f}')
         
-<<<<<<< HEAD
-        return accuracy, precision, f1
-=======
         return loss, accuracy, precision, f1_score
->>>>>>> 1b8bbe0c7f44d3cad526a62658967f81a1837864
     
-    def plot_metrics(self, metrics=['accuracy', 'precision', 'f1']):
+    def plot_metrics(self, metrics=['accuracy', 'precision']):
         plt.figure(figsize=(10, 6))
 
         if 'accuracy' in metrics and 'accuracy' in self.history.history:
             plt.plot(self.history.history['accuracy'], label='Accuracy')
         if 'precision' in metrics and 'precision' in self.history.history:
             plt.plot(self.history.history['precision'], label='Precision')
-<<<<<<< HEAD
-        if 'f1' in metrics and 'f1' in self.history.history:
-            plt.plot(self.history.history['f1'], label='f1')  
-=======
         if 'f1_score' in metrics and self.history.history['f1_score']:
             plt.plot(self.history.history['f1_score'], label='F1 Score')
->>>>>>> 1b8bbe0c7f44d3cad526a62658967f81a1837864
 
         plt.xlabel('Epochs')
         plt.ylabel('Metric Value')
