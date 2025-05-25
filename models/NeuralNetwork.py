@@ -8,12 +8,25 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 
 import warnings
-from sklearn.metrics import f1_score
 warnings.filterwarnings('ignore')
 
 class TitanicSurvivalModel:
-    def __init__(self, dataset_path: str):
+    def __init__(self, 
+                 dataset_path: str,
+                 epochs: int = 500,
+                 batch_size: int = 10,
+                 test_split: float = 0.1,
+                 validation_split: float = 0.1,
+                 learning_rate: float = 1e-3,
+                ):
+        
         self.dataset_path = dataset_path
+        
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.test_size = test_split
+        self.validation_split = validation_split
+        self.learning_rate = learning_rate
         
         self.model = None
         self.scaler = StandardScaler()
@@ -51,7 +64,7 @@ class TitanicSurvivalModel:
 
         # Split train/test
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-            X_scaled, y, test_size=0.1, random_state=42
+            X_scaled, y, test_size=self.test_size, random_state=42
         )
 
     def build_model(self):
@@ -78,7 +91,7 @@ class TitanicSurvivalModel:
             tf.keras.layers.Dense(1, activation='sigmoid')
         ])
         
-        optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
+        optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
         loss = tf.keras.losses.BinaryCrossentropy()
         
         self.model.compile(
@@ -92,13 +105,25 @@ class TitanicSurvivalModel:
             ]
         )
 
-    def train(self, epochs=500, batch_size=10, validation_split=0):
+    def train(self):
+        
+        if self.validation_split != 0:
+            early_stopping = tf.keras.callbacks.EarlyStopping(
+                monitor='val_loss',
+                patience=10,
+                restore_best_weights=True
+            )
+        else:
+            early_stopping = None
+        
         self.history = self.model.fit(
             self.X_train, 
             self.y_train, 
-            epochs=epochs, 
-            batch_size=batch_size, 
-            validation_split=validation_split
+            epochs=self.epochs, 
+            batch_size=self.batch_size, 
+            validation_split=self.validation_split,
+            callbacks=[early_stopping]
+            
         )
 
     def evaluate(self):
