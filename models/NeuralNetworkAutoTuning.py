@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import tensorflow as tf
+import keras_tuner as kt
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
@@ -12,36 +13,31 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import warnings
 warnings.filterwarnings('ignore')
 
-class TitanicSurvivalModel:
+class TitanicSurvivalModelAutoTuning:
     def __init__(
         self, 
         dataset_path: str,
-        epochs = 500,
-        batch_size = 64,
-        test_split = 0.1,
-        validation_split = 0.2,
-        learning_rate = 1e-3,
+        epochs=100,
+        batch_size=64,
+        test_split=0.1,
+        validation_split=0.2,
+        max_trials=20,
     ):
-        
         self.dataset_path = dataset_path
-        
         self.epochs = epochs
         self.batch_size = batch_size
         self.test_size = test_split
         self.validation_split = validation_split
-        self.learning_rate = learning_rate
-        
+        self.max_trials = max_trials
+
         self.model = None
         self.scaler = StandardScaler()
         self.label_encoders = {}
 
     def load_and_preprocess_data(self):
         df = pd.read_csv(self.dataset_path)
-
-        # Preprocessing
         df_processed = df.copy()
-        
-        # 1. Estrai il titolo dal nome prima di rimuovere le colonne
+
         if 'Name' in df.columns:
             df_processed['Title'] = df['Name'].str.extract(' ([A-Za-z]+)\.', expand=False)
             df_processed['Title'] = df_processed['Title'].replace(['Lady', 'Countess','Capt', 'Col',
@@ -49,127 +45,110 @@ class TitanicSurvivalModel:
             df_processed['Title'] = df_processed['Title'].replace('Mlle', 'Miss')
             df_processed['Title'] = df_processed['Title'].replace('Ms', 'Miss')
             df_processed['Title'] = df_processed['Title'].replace('Mme', 'Mrs')
-        
-        # 2. Rimuovi colonne non utili per la predizione
+
         columns_to_drop = ['PassengerId', 'Name', 'Ticket']
         df_processed = df_processed.drop(columns=[col for col in columns_to_drop if col in df_processed.columns])
-        
-        # 3. Gestisci i valori mancanti
-        # Age: riempi con la mediana
+
         df_processed['Age'].fillna(df_processed['Age'].median(), inplace=True)
-        
-        # Embarked: riempi con il valore più frequente
         df_processed['Embarked'].fillna(df_processed['Embarked'].mode()[0], inplace=True)
-        
-        # Cabin: crea una feature binaria per indicare se la cabina è presente
         df_processed['Has_Cabin'] = df_processed['Cabin'].notna().astype(int)
         df_processed = df_processed.drop('Cabin', axis=1)
-        
-        # 4. Feature engineering aggiuntive
-        # Crea feature famiglia
+
         df_processed['Family_Size'] = df_processed['SibSp'] + df_processed['Parch'] + 1
         df_processed['Is_Alone'] = (df_processed['Family_Size'] == 1).astype(int)
-        
-        # Crea fasce di età
-        df_processed['Age_Group'] = pd.cut(df_processed['Age'], 
-                                         bins=[0, 12, 18, 35, 60, 100], 
-                                         labels=[0, 1, 2, 3, 4])
-        df_processed['Age_Group'] = df_processed['Age_Group'].astype(int)
-        
-        # Crea fasce di tariffa
-        df_processed['Fare_Group'] = pd.qcut(df_processed['Fare'], 
-                                           q=4, 
-                                           labels=[0, 1, 2, 3])
-        df_processed['Fare_Group'] = df_processed['Fare_Group'].astype(int)
-        
-        # 5. Converti la variabile target in formato binario
+
+        df_processed['Age_Group'] = pd.cut(df_processed['Age'], bins=[0, 12, 18, 35, 60, 100], labels=[0, 1, 2, 3, 4]).astype(int)
+        df_processed['Fare_Group'] = pd.qcut(df_processed['Fare'], q=4, labels=[0, 1, 2, 3]).astype(int)
+
         df_processed['Survived'] = (df_processed['Survived'] == 'Yes').astype(int)
-        
-        # 6. Encoding delle variabili categoriche
+
         categorical_columns = ['Sex', 'Embarked']
         if 'Title' in df_processed.columns:
             categorical_columns.append('Title')
-            
+
         for col in categorical_columns:
             if col in df_processed.columns:
                 le = LabelEncoder()
                 df_processed[col] = le.fit_transform(df_processed[col])
                 self.label_encoders[col] = le
-        
+
         print("\n✅ Preprocessing completato!")
         print(f"Features finali: {list(df_processed.columns)}")
 
-        # Separazione tra features e target
         X = df_processed.drop('Survived', axis=1)
         y = df_processed['Survived']
-
-        # Normalizzazione
         X_scaled = self.scaler.fit_transform(X)
 
-        # Split train/test
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
             X_scaled, y, test_size=self.test_size, random_state=42
         )
 
-    def build_model(self):
-        self.model = tf.keras.models.Sequential([
-            # Input layer
-            tf.keras.layers.Dense(16, activation='relu', input_shape=(self.X_train.shape[1],)),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.1),
-            
-            # Hidden layers
-            tf.keras.layers.Dense(8, activation='relu'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.2),
-            
-            tf.keras.layers.Dense(8, activation='relu'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.2),
-            
-            tf.keras.layers.Dense(8, activation='relu'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.2),
-            
-            # Output layer
-            tf.keras.layers.Dense(1, activation='sigmoid')
-        ])
-        
-        optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
-        loss = tf.keras.losses.BinaryCrossentropy()
-        
-        self.model.compile(
-            optimizer=optimizer,
-            loss=loss,
-            metrics=[
-                # tf.keras.metrics.Accuracy(name="accuracy"),
-                'accuracy',
-                tf.keras.metrics.Precision(name="precision"),
-                tf.keras.metrics.F1Score(name="f1_score")           
-            ]
+    def model_builder(self, hp):
+        model = tf.keras.Sequential()
+        model.add(tf.keras.layers.Dense(
+            units=hp.Int('units_input', min_value=8, max_value=256, step=8),
+            activation=hp.Choice('activation_input', ['relu']),
+            input_shape=(self.X_train.shape[1],)
+        ))
+        for i in range(hp.Int("n_layers", 1, 3)):
+            model.add(tf.keras.layers.Dense(
+                units=hp.Int(f'units_{i}', min_value=8, max_value=128, step=8),
+                activation=hp.Choice(f'activation_{i}', ['relu'])
+            ))
+            model.add(tf.keras.layers.Dropout(
+                rate=hp.Float(f'dropout_{i}', min_value=0.1, max_value=0.5, step=0.1)
+            ))
+
+        model.add(tf.keras.layers.Dense(1, activation='sigmoid'))
+
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(
+                learning_rate=hp.Float('lr', 1e-4, 1e-2, sampling='log')
+            ),
+            loss='binary_crossentropy',
+            metrics=['accuracy', tf.keras.metrics.Precision(), tf.keras.metrics.F1Score()]
+        )
+        return model
+
+    def tune_model(self):
+        tuner = kt.RandomSearch(
+            self.model_builder,
+            objective='val_accuracy',
+            max_trials=self.max_trials,
+            executions_per_trial=2,
+            directory='keras_tuner',
+            project_name='titanic_tuning'
         )
 
-    def train(self):
-        
+        tuner.search(self.X_train, self.y_train,
+                     epochs=self.epochs,
+                     validation_split=self.validation_split,
+                     callbacks=[tf.keras.callbacks.EarlyStopping(patience=10)])
+
+        self.best_hp = tuner.get_best_hyperparameters(1)[0]
+        self.model = tuner.get_best_models(1)[0]
+        print("\n✅ Migliori iperparametri trovati:")
+        for param in self.best_hp.values.keys():
+            print(f"{param}: {self.best_hp.get(param)}")
+
+    def train_best_model(self):
         class_weights = class_weight.compute_class_weight(
             class_weight='balanced',
             classes=np.unique(self.y_train),
             y=self.y_train
         )
-        
         class_weights_dict = dict(enumerate(class_weights))
-        
         early_stopping = tf.keras.callbacks.EarlyStopping(
             monitor='val_loss',
-            patience=15,
+            patience=10,
             restore_best_weights=True
         )
 
         self.history = self.model.fit(
-            self.X_train, 
-            self.y_train, 
-            epochs=self.epochs, 
-            batch_size=self.batch_size, 
+            self.X_train,
+            self.y_train,
+            epochs=self.epochs,
+            batch_size=self.batch_size,
             validation_split=self.validation_split,
             callbacks=[early_stopping],
             class_weight=class_weights_dict
@@ -177,17 +156,14 @@ class TitanicSurvivalModel:
 
     def evaluate(self):
         loss, accuracy, precision, f1_score = self.model.evaluate(self.X_test, self.y_test)
-        
         print(f'Test Accuracy: {accuracy:.2f}')
         print(f'Test Precision: {precision:.2f}')
         print(f'Test F1 Score: {f1_score:.2f}')
         print(f'Test Loss: {loss:.2f}')
-        
         return loss, accuracy, precision, f1_score
-    
+
     def plot_metrics(self, metrics=['accuracy', 'precision']):
         plt.figure(figsize=(10, 6))
-
         if 'accuracy' in metrics and 'accuracy' in self.history.history:
             plt.plot(self.history.history['accuracy'], label='Accuracy')
         if 'precision' in metrics and 'precision' in self.history.history:
@@ -202,24 +178,20 @@ class TitanicSurvivalModel:
         plt.grid(True)
         plt.show()
 
-        
     def plot_loss(self):
         plt.figure(figsize=(10, 6))
-        
         plt.plot(self.history.history['loss'], label='Loss')
-        
         plt.xlabel('Epochs')
         plt.ylabel('Loss Value')
         plt.title('Evaluation Loss over Time')
         plt.legend()
         plt.grid(True)
         plt.show()
-        
+
     def plot_confusion_matrix(self):
         y_pred = (self.model.predict(self.X_test) > 0.5).astype(int)
         cm = confusion_matrix(self.y_test, y_pred)
         disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["No", "Yes"])
-        
         disp.plot(cmap=plt.cm.Blues)
         plt.title("Confusion Matrix")
         plt.show()
@@ -230,17 +202,13 @@ class TitanicSurvivalModel:
         return {"probability": prob, "prediction": int(prob > 0.5)}
 
 def main():
-    model = TitanicSurvivalModel('data/dataset.csv')
+    model = TitanicSurvivalModelAutoTuning('data/dataset.csv')
     model.load_and_preprocess_data()
-    model.build_model()
-    model.train()
+    model.tune_model()
+    model.train_best_model()
     model.evaluate()
     model.plot_metrics()
     model.plot_loss()
 
-    # Esempio di passeggero
-    sample_passenger = [3, 1, 22.0, 1, 0, 7.25, 2]
-    print(model.predict(sample_passenger))
-    
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
