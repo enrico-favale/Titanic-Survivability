@@ -19,7 +19,7 @@ class TitanicSurvivalModelAutoTuning:
         dataset_path: str,
         epochs=100,
         batch_size=32,
-        test_split=0.2,
+        test_split=0.1,
         validation_split=0.2,
         max_trials=10,
     ):
@@ -113,7 +113,7 @@ class TitanicSurvivalModelAutoTuning:
     def tune_model(self):
         tuner = kt.RandomSearch(
             self.model_builder,
-            objective=kt.Objective('val_f1_score', direction='max'),
+            objective=kt.Objective('val_accuracy', direction='max'),
             max_trials=self.max_trials,
             executions_per_trial=2,
             directory='keras_tuner',

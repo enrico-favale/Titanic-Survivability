@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
 from sklearn.utils import class_weight
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
@@ -45,11 +45,11 @@ class TitanicSurvivalModel:
         if 'Name' in df.columns:
             df_processed['Title'] = df['Name'].str.extract(' ([A-Za-z]+)\.', expand=False)
             df_processed['Title'] = df_processed['Title'].replace(['Lady', 'Countess','Capt', 'Col',
-                                                                 'Don', 'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer', 'Dona'], 'Rare')
-            df_processed['Title'] = df_processed['Title'].replace('Mlle', 'Miss')
-            df_processed['Title'] = df_processed['Title'].replace('Ms', 'Miss')
+                                                                        'Don', 'Dr', 'Major', 'Rev', 'Sir', 
+                                                                        'Jonkheer', 'Dona'], 'Rare')
+            df_processed['Title'] = df_processed['Title'].replace(['Mlle', 'Ms'], 'Miss')
             df_processed['Title'] = df_processed['Title'].replace('Mme', 'Mrs')
-        
+                
         # 2. Rimuovi colonne non utili per la predizione
         columns_to_drop = ['PassengerId', 'Name', 'Ticket']
         df_processed = df_processed.drop(columns=[col for col in columns_to_drop if col in df_processed.columns])
@@ -185,28 +185,28 @@ class TitanicSurvivalModel:
         
         return loss, accuracy, precision, f1_score
     
-    def plot_metrics(self, metrics=['accuracy', 'precision']):
-        plt.figure(figsize=(10, 6))
-
-        if 'accuracy' in metrics and 'accuracy' in self.history.history:
-            plt.plot(self.history.history['accuracy'], label='Accuracy')
-        if 'precision' in metrics and 'precision' in self.history.history:
-            plt.plot(self.history.history['precision'], label='Precision')
-        if 'f1_score' in metrics and self.history.history['f1_score']:
-            plt.plot(self.history.history['f1_score'], label='F1 Score')
-
-        plt.xlabel('Epochs')
-        plt.ylabel('Metric Value')
-        plt.title('Evaluation Metrics over Time')
-        plt.legend()
-        plt.grid(True)
-        plt.show()
-
-        
+    def plot_metrics(self, metrics=['accuracy', 'precision', 'f1_score']):
+        for metric in metrics:
+            if metric in self.history.history and not metric.startswith('val_'):
+                plt.figure(figsize=(10, 6))
+                
+                plt.plot(self.history.history[metric], label=metric.capitalize())
+                if self.history.history[f'val_{metric}']: plt.plot(self.history.history[f'val_{metric}'], label=f'Validation {metric.capitalize()}')
+                
+                plt.xlabel('Epochs')
+                plt.ylabel('Metric Value')
+                plt.title(f'Evaluation {metric} over Time')
+                plt.legend()
+                plt.grid(True)
+                plt.show()
+            else:
+                print(f"Metric '{metric}' not found in history.")
+                
     def plot_loss(self):
         plt.figure(figsize=(10, 6))
         
         plt.plot(self.history.history['loss'], label='Loss')
+        plt.plot(self.history.history['val_loss'], label='Validation Loss')
         
         plt.xlabel('Epochs')
         plt.ylabel('Loss Value')
