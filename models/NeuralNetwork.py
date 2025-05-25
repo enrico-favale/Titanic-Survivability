@@ -114,20 +114,20 @@ class TitanicSurvivalModel:
     def build_model(self):
         self.model = tf.keras.models.Sequential([
             # Input layer
-            tf.keras.layers.Dense(16, activation='relu', input_shape=(self.X_train.shape[1],)),
+            tf.keras.layers.Dense(160, activation='relu', input_shape=(self.X_train.shape[1],)),
             tf.keras.layers.BatchNormalization(),
             tf.keras.layers.Dropout(0.1),
             
             # Hidden layers
-            tf.keras.layers.Dense(8, activation='relu'),
+            tf.keras.layers.Dense(104, activation='relu'),
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dropout(0.4),
             
-            tf.keras.layers.Dense(8, activation='relu'),
+            tf.keras.layers.Dense(48, activation='relu'),
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dropout(0.4),
             
-            tf.keras.layers.Dense(8, activation='relu'),
+            tf.keras.layers.Dense(112, activation='relu'),
             tf.keras.layers.BatchNormalization(),
             tf.keras.layers.Dropout(0.2),
             
@@ -161,7 +161,7 @@ class TitanicSurvivalModel:
         
         early_stopping = tf.keras.callbacks.EarlyStopping(
             monitor='val_loss',
-            patience=15,
+            patience=10,
             restore_best_weights=True
         )
 
