@@ -9,6 +9,8 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
 from sklearn.utils import class_weight
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
+import joblib
+
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -49,10 +51,6 @@ class TitanicSurvivalModel:
                                                                         'Jonkheer', 'Dona'], 'Rare')
             df_processed['Title'] = df_processed['Title'].replace(['Mlle', 'Ms'], 'Miss')
             df_processed['Title'] = df_processed['Title'].replace('Mme', 'Mrs')
-                
-        # 2. Rimuovi colonne non utili per la predizione
-        columns_to_drop = ['PassengerId', 'Name', 'Ticket']
-        df_processed = df_processed.drop(columns=[col for col in columns_to_drop if col in df_processed.columns])
         
         # 3. Gestisci i valori mancanti
         # Age: riempi con la mediana
@@ -82,6 +80,10 @@ class TitanicSurvivalModel:
                                            labels=[0, 1, 2, 3])
         df_processed['Fare_Group'] = df_processed['Fare_Group'].astype(int)
         
+        # 2. Rimuovi colonne non utili per la predizione
+        columns_to_drop = ['PassengerId', 'Name', 'Ticket', 'Cabin']
+        df_processed = df_processed.drop(columns=[col for col in columns_to_drop if col in df_processed.columns])
+        
         # 5. Converti la variabile target in formato binario
         df_processed['Survived'] = (df_processed['Survived'] == 'Yes').astype(int)
         
@@ -95,9 +97,6 @@ class TitanicSurvivalModel:
                 le = LabelEncoder()
                 df_processed[col] = le.fit_transform(df_processed[col])
                 self.label_encoders[col] = le
-        
-        print("\n✅ Preprocessing completato!")
-        print(f"Features finali: {list(df_processed.columns)}")
 
         # Separazione tra features e target
         X = df_processed.drop('Survived', axis=1)
@@ -110,6 +109,9 @@ class TitanicSurvivalModel:
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
             X_scaled, y, test_size=self.test_size, random_state=42
         )
+        
+        print("\n✅ Preprocessing completato!")
+        print(f"Features finali: {list(df_processed.columns)}")
 
     def build_model(self):
         self.model = tf.keras.models.Sequential([
@@ -223,6 +225,41 @@ class TitanicSurvivalModel:
         disp.plot(cmap=plt.cm.Blues)
         plt.title("Confusion Matrix")
         plt.show()
+        
+    def start(self):
+        self.load_and_preprocess_data()
+        self.build_model()
+        self.train()
+        self.evaluate()
+        
+    def plot_all(self):
+        self.plot_metrics()
+        self.plot_loss()
+        self.plot_confusion_matrix()
+        
+    def summarize(self):
+        print(self.model.summary())
+
+        # Calcolo del numero di esempi
+        total_samples = self.X_train.shape[0] + self.X_test.shape[0]
+        train_samples = int(self.X_train.shape[0] * (1 - self.validation_split))
+        val_samples = int(self.X_train.shape[0] * self.validation_split)
+        test_samples = self.X_test.shape[0]
+
+        print(
+            f'\nIperparametri:\n\n'
+            f' Epochs: {self.epochs}\n'
+            f' Batch Size: {self.batch_size}\n'
+            f' Learning Rate: {self.learning_rate}\n'
+            f'\nDataset Splits:\n\n'
+            f' Training Split: {1 - self.test_size:.2f} -> {train_samples} esempi\n'
+            f' Validation Split: {self.validation_split:.2f} -> {val_samples} esempi\n'
+            f' Test Split: {self.test_size:.2f} -> {test_samples} esempi\n'
+            f' Totale: {total_samples} esempi\n'
+        )
+    def save_model(self, path):
+        self.model.save(filepath=f"{path}/model.keras")
+        joblib.dump(self.scaler, f"{path}/scaler.pkl")
 
     def predict(self, passenger_data):
         scaled = self.scaler.transform([passenger_data])
