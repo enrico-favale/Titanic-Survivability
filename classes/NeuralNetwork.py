@@ -260,24 +260,10 @@ class TitanicSurvivalModel:
     def save_model(self, path):
         self.model.save(filepath=f"{path}/model.keras")
         joblib.dump(self.scaler, f"{path}/scaler.pkl")
-
-    def predict(self, passenger_data):
-        scaled = self.scaler.transform([passenger_data])
-        prob = self.model.predict(scaled)[0][0]
-        return {"probability": prob, "prediction": int(prob > 0.5)}
+        joblib.dump(self.label_encoders, f"{path}/label_encoders.pkl")
 
 def main():
-    model = TitanicSurvivalModel('data/dataset.csv')
-    model.load_and_preprocess_data()
-    model.build_model()
-    model.train()
-    model.evaluate()
-    model.plot_metrics()
-    model.plot_loss()
-
-    # Esempio di passeggero
-    sample_passenger = [3, 1, 22.0, 1, 0, 7.25, 2]
-    print(model.predict(sample_passenger))
+    pass
     
 if __name__=="__main__":
     main()
