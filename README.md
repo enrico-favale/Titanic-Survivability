@@ -6,7 +6,7 @@ This project uses a neural network built with TensorFlow to predict the survival
 
 ## 📊 Dataset
 
-The dataset used is the well-known [Titanic dataset](https://www.kaggle.com/c/titanic/data) available on Kaggle. It contains demographic and travel information for passengers, including:
+The dataset used is available as `dataset.csv` in the repository. It contains demographic and travel information for passengers, including:
 
 * **Pclass**: ticket class (1st, 2nd, 3rd)
 * **Sex**: gender
@@ -29,11 +29,13 @@ During preprocessing, the following engineered features were created:
 
 ## 🧠 Model
 
-The model is a dense neural network (`Dense`) with the following architecture:
+The model is a dense neural network with the following architecture:
 
 ```text
-Input -> Dense(64, relu) -> Dropout(0.3)
-      -> Dense(32, relu) -> Dropout(0.3)
+Input -> Dense(160, relu) -> BatchNormalization() -> Dropout(0.1)
+      -> Dense(104, relu) -> BatchNormalization() -> Dropout(0.4)
+      -> Dense(48, relu) -> BatchNormalization() -> Dropout(0.4)
+      -> Dense(112, relu) -> BatchNormalization() -> Dropout(0.2)
       -> Dense(1, sigmoid)
 ```
 
@@ -113,6 +115,27 @@ pip install -r requirements.txt
 ## 📈 Visualizing Metrics
 
 During training, you can visualize the metrics progression using the `plot_metrics()` function.
+
+---
+
+## Results
+
+The trained neural network shows solid performance in predicting Titanic passenger survival based on the selected features. After training and evaluating the model on a hold-out test set, the following key performance metrics were achieved:
+
+* Accuracy: 84% -> 
+The model correctly classifies approximately 84% of the passengers, indicating strong overall performance.
+
+* Precision: 87% -> 
+Among the passengers the model predicts as survivors, 87% are actually survivors. This high precision demonstrates the model’s ability to reduce false positives.
+
+* F1 Score: 57% -> 
+The F1 Score balances precision and recall. While precision is high, the moderate F1 Score suggests the model may still miss some true survivors (i.e., false negatives). This highlights potential room for improvement in recall.
+
+* Loss: 0.38 (Binary Crossentropy) -> 
+This loss value indicates that the model has learned to make probabilistic predictions with reasonable confidence, though further hyperparameter tuning or feature engineering may improve it.
+
+Training Curves
+Training and validation metrics show good convergence, with no significant overfitting observed. This is supported by similar accuracy and loss values on both training and validation sets.
 
 ---
 
