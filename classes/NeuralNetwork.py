@@ -43,7 +43,7 @@ class TitanicSurvivalModel:
         # Preprocessing
         df_processed = df.copy()
         
-        # 1. Estrai il titolo dal nome prima di rimuovere le colonne
+        # Extraction of the title from the name
         if 'Name' in df.columns:
             df_processed['Title'] = df['Name'].str.extract(' ([A-Za-z]+)\.', expand=False)
             df_processed['Title'] = df_processed['Title'].replace(['Lady', 'Countess','Capt', 'Col',
@@ -52,42 +52,43 @@ class TitanicSurvivalModel:
             df_processed['Title'] = df_processed['Title'].replace(['Mlle', 'Ms'], 'Miss')
             df_processed['Title'] = df_processed['Title'].replace('Mme', 'Mrs')
         
-        # 3. Gestisci i valori mancanti
-        # Age: riempi con la mediana
+        # Filling the missing values
+        
+        # Age: using median
         df_processed['Age'].fillna(df_processed['Age'].median(), inplace=True)
         
-        # Embarked: riempi con il valore più frequente
+        # Embarked: using mode
         df_processed['Embarked'].fillna(df_processed['Embarked'].mode()[0], inplace=True)
         
-        # Cabin: crea una feature binaria per indicare se la cabina è presente
+        # Cabin: creation of a new binary feature 'Has_Cabin'
         df_processed['Has_Cabin'] = df_processed['Cabin'].notna().astype(int)
         df_processed = df_processed.drop('Cabin', axis=1)
         
-        # 4. Feature engineering aggiuntive
-        # Crea feature famiglia
+        # Feature engineering for extend the dataset
+        
+        # Family features
         df_processed['Family_Size'] = df_processed['SibSp'] + df_processed['Parch'] + 1
         df_processed['Is_Alone'] = (df_processed['Family_Size'] == 1).astype(int)
         
-        # Crea fasce di età
+        # Age group
         df_processed['Age_Group'] = pd.cut(df_processed['Age'], 
                                          bins=[0, 12, 18, 35, 60, 100], 
                                          labels=[0, 1, 2, 3, 4])
         df_processed['Age_Group'] = df_processed['Age_Group'].astype(int)
         
-        # Crea fasce di tariffa
+        # Fare group
         df_processed['Fare_Group'] = pd.qcut(df_processed['Fare'], 
                                            q=4, 
                                            labels=[0, 1, 2, 3])
         df_processed['Fare_Group'] = df_processed['Fare_Group'].astype(int)
         
-        # 2. Rimuovi colonne non utili per la predizione
+        # Drop of useless columns
         columns_to_drop = ['PassengerId', 'Name', 'Ticket', 'Cabin']
         df_processed = df_processed.drop(columns=[col for col in columns_to_drop if col in df_processed.columns])
         
-        # 5. Converti la variabile target in formato binario
+        # Conversion of categorical variables into numerical
         df_processed['Survived'] = (df_processed['Survived'] == 'Yes').astype(int)
         
-        # 6. Encoding delle variabili categoriche
         categorical_columns = ['Sex', 'Embarked']
         if 'Title' in df_processed.columns:
             categorical_columns.append('Title')
@@ -98,11 +99,11 @@ class TitanicSurvivalModel:
                 df_processed[col] = le.fit_transform(df_processed[col])
                 self.label_encoders[col] = le
 
-        # Separazione tra features e target
+        # Division in feature and target
         X = df_processed.drop('Survived', axis=1)
         y = df_processed['Survived']
 
-        # Normalizzazione
+        # Normalizzation
         X_scaled = self.scaler.fit_transform(X)
 
         # Split train/test
@@ -245,7 +246,6 @@ class TitanicSurvivalModel:
     def summarize(self):
         print(self.model.summary())
 
-        # Calcolo del numero di esempi
         total_samples = self.X_train.shape[0] + self.X_test.shape[0]
         train_samples = int(self.X_train.shape[0] * (1 - self.validation_split))
         val_samples = int(self.X_train.shape[0] * self.validation_split)
