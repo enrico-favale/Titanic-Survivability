@@ -1,149 +1,123 @@
-Perfetto! Ecco la spiegazione dettagliata di **tutte le feature** presenti nel dataset `6_titanic.csv`, che userai per predire la **sopravvivenza** dei passeggeri con una rete neurale.
+# 🚢 Titanic Survivability Prediction with TensorFlow
+
+This project uses a neural network built with TensorFlow to predict the survival probability of Titanic passengers, based on a set of engineered features. The model can be used in production through a convenient object-oriented interface via the `Passenger` class.
 
 ---
 
-## 🎯 Target: `Survived`
+## 📊 Dataset
 
-* **Tipo**: categorica (binaria)
-* **Valori**:
+The dataset used is the well-known [Titanic dataset](https://www.kaggle.com/c/titanic/data) available on Kaggle. It contains demographic and travel information for passengers, including:
 
-  * `"Yes"` → passeggero **sopravvissuto**
-  * `"No"` → passeggero **deceduto**
-* Questo è il **valore da predire**
+* **Pclass**: ticket class (1st, 2nd, 3rd)
+* **Sex**: gender
+* **Age**: age
+* **SibSp**: number of siblings/spouses aboard
+* **Parch**: number of parents/children aboard
+* **Fare**: ticket fare
+* **Embarked**: port of embarkation
+* **Cabin**: cabin (partially available)
 
----
+During preprocessing, the following engineered features were created:
 
-## 🧾 Caratteristiche (Feature)
-
-### 1. `PassengerId`
-
-* **Tipo**: numerica (intera)
-* **Significato**: identificatore univoco del passeggero
-* **Dominio**: interi positivi
-* **Nota**: **inutile per la predizione** (non contiene informazione)
-
----
-
-### 2. `Pclass`
-
-* **Tipo**: categorica (ordinata)
-* **Significato**: classe del biglietto (status socio-economico)
-* **Valori**:
-
-  * `1` = Prima classe (alta)
-  * `2` = Seconda classe (media)
-  * `3` = Terza classe (bassa)
-* **Importante**: sì, spesso correlata alla sopravvivenza
+* **Title**: title extracted from the name (e.g., Mr, Miss, Rare)
+* **Has\_Cabin**: boolean derived from cabin field availability
+* **Family\_Size**: SibSp + Parch + 1
+* **Is\_Alone**: boolean, 1 if traveling alone
+* **Age\_Group** and **Fare\_Group**: binned versions of Age and Fare
 
 ---
 
-### 3. `Name`
+## 🧠 Model
 
-* **Tipo**: testuale
-* **Significato**: nome completo del passeggero
-* **Dominio**: testo
-* **Utilizzo**:
+The model is a dense neural network (`Dense`) with the following architecture:
 
-  * Non usato direttamente
-  * Ma si possono **estrarre il titolo (Mr, Mrs, Miss, ecc.)** come nuova feature utile
+```text
+Input -> Dense(64, relu) -> Dropout(0.3)
+      -> Dense(32, relu) -> Dropout(0.3)
+      -> Dense(1, sigmoid)
+```
 
----
-
-### 4. `Sex`
-
-* **Tipo**: categorica
-* **Valori**:
-
-  * `male`
-  * `female`
-* **Importante**: sì → le donne hanno avuto **più probabilità di sopravvivenza**
+* **Loss**: `binary_crossentropy`
+* **Optimizer**: `Adam`
+* **Metrics**: `accuracy`, `Precision`, `F1-score`
 
 ---
 
-### 5. `Age`
+## 🧪 Hyperparameters
 
-* **Tipo**: numerica (float)
-* **Valori**: età in anni
-* **Dominio**: continuo, es. `0.42` a `80.0`
-* **Missing values**: sì → bisogna gestirli (es. imputazione con media o mediana)
-
----
-
-### 6. `SibSp`
-
-* **Tipo**: numerica (intera)
-* **Significato**: numero di **fratelli/sorelle o coniugi** a bordo
-* **Valori**: 0, 1, 2, ...
-* **Possibile impatto**: misura **supporto familiare** → può influenzare la sopravvivenza
+* **Epochs**: 37
+* **Batch size**: 64
+* **Validation split**: 0.2
+* **Test split**: 0.1
+* **EarlyStopping** to prevent overfitting with a patience of 5
 
 ---
 
-### 7. `Parch`
+## 👻 Using the `Passenger` Class
 
-* **Tipo**: numerica (intera)
-* **Significato**: numero di **genitori o figli** a bordo
-* **Interpretazione simile a `SibSp`**
+Once the model is trained, you can predict a passenger's survival by creating a `Passenger` object:
 
----
+```python
+from classes.Passenger import Passenger
 
-### 8. `Ticket`
+passenger = Passenger(
+    Pclass=1,
+    Sex="male",
+    Title="Mr",
+    Age=30.0,
+    SibSp=0,
+    Parch=0,
+    Fare=7.25,
+    Embarked="S",
+)
 
-* **Tipo**: testuale
-* **Significato**: numero del biglietto
-* **Dominio**: stringhe varie
-* **Nota**: può contenere **codici utili**, ma è rumorosa → di solito non usata direttamente
+passenger.predict()
+```
 
----
-
-### 9. `Fare`
-
-* **Tipo**: numerica (float)
-* **Valori**: prezzo del biglietto pagato
-* **Dominio**: continuo, es. da 0 a oltre 500
-* **Importante**: sì → correlato alla `Pclass`, può dare **indicazioni sulla ricchezza**
-
----
-
-### 10. `Cabin`
-
-* **Tipo**: categorica/testuale (spesso mancante)
-* **Significato**: cabina assegnata
-* **Nota**:
-
-  * Molti `NaN`
-  * Può essere utile solo **dopo pulizia/estrazione della lettera** (es. 'C' in 'C123')
+The prediction will return both the **survival probability** and the **predicted class** (0 = not survived, 1 = survived).
 
 ---
 
-### 11. `Embarked`
+## 🗃️ Saved Files Structure
 
-* **Tipo**: categorica
-* **Significato**: porto di imbarco
-* **Valori**:
+The model and preprocessing steps are saved under the `saved_models/` directory:
 
-  * `C` = Cherbourg
-  * `Q` = Queenstown
-  * `S` = Southampton
-* **Importanza**: moderata; `S` è il più comune
-
----
-
-## 📦 Riassunto delle colonne da usare nella rete neurale
-
-| Colonna       | Usare? | Note                          |
-| ------------- | ------ | ----------------------------- |
-| `PassengerId` | ❌      | Identificativo inutile        |
-| `Pclass`      | ✅      | Codificare come categorica    |
-| `Name`        | ❌/⚠️   | Puoi **estrarre il titolo**   |
-| `Sex`         | ✅      | Codificare in numerico        |
-| `Age`         | ✅      | Gestire i `NaN`               |
-| `SibSp`       | ✅      | Valori interi                 |
-| `Parch`       | ✅      | Valori interi                 |
-| `Ticket`      | ❌      | Troppo rumorosa               |
-| `Fare`        | ✅      | Scala ampia → normalizzare    |
-| `Cabin`       | ⚠️     | Può essere utile dopo parsing |
-| `Embarked`    | ✅      | Codifica categorica one-hot   |
+```
+saved_models/
+│
+├── model.keras              # TensorFlow-saved model
+├── scaler.pkl              # StandardScaler used for normalization
+└── label_encoders.pkl      # Dict with LabelEncoders for categorical columns
+```
 
 ---
 
-Vuoi che ti aiuti a **preparare questi dati** per addestrare una rete neurale?
+## 📦 Requirements
+
+* Python 3.10+
+* TensorFlow 2.15+
+* Scikit-learn
+* Pandas
+* Numpy
+* Matplotlib
+* Joblib
+
+Install dependencies with:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## 📈 Visualizing Metrics
+
+During training, you can visualize the metrics progression using the `plot_metrics()` function.
+
+---
+
+## ✅ Future To-dos
+
+* Add interactive UI for real-time predictions
+* REST API version with Flask or FastAPI
+* Integration with a React-based frontend

@@ -193,7 +193,10 @@ class TitanicSurvivalModel:
                 plt.figure(figsize=(10, 6))
                 
                 plt.plot(self.history.history[metric], label=metric.capitalize())
-                if self.history.history[f'val_{metric}']: plt.plot(self.history.history[f'val_{metric}'], label=f'Validation {metric.capitalize()}')
+                key = f'val_{metric}'
+                if key in self.history.history:
+                    plt.plot(self.history.history[key], label=f'Validation {metric.capitalize()}')
+
                 
                 plt.xlabel('Epochs')
                 plt.ylabel('Metric Value')
@@ -208,7 +211,9 @@ class TitanicSurvivalModel:
         plt.figure(figsize=(10, 6))
         
         plt.plot(self.history.history['loss'], label='Loss')
-        plt.plot(self.history.history['val_loss'], label='Validation Loss')
+        key = 'val_loss'
+        if key in self.history.history:
+            plt.plot(self.history.history[key], label='Validation Loss')
         
         plt.xlabel('Epochs')
         plt.ylabel('Loss Value')
